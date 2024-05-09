@@ -9,12 +9,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+# Matthew Storm: Responsible for loading and initial data display
 def load_data(filepath):
     df = pd.read_csv(filepath)
     print("Data loaded:\n", df.head())
     return df
 
 
+# Julian Bartosz: Handles data preprocessing and normalization
 def preprocess_data(df, is_training_data=True, scaler=None, mean=None):
     print("Data before preprocessing:\n", df.head())
     mappings = {
@@ -49,6 +51,7 @@ def preprocess_data(df, is_training_data=True, scaler=None, mean=None):
     return df, scaler, mean
 
 
+# Farhan Sarkar: Visualizes data distribution for key variables
 def plot_distribution(df, column, title):
     plt.figure(figsize=(8, 6))
     sns.countplot(x=column, data=df)
@@ -63,6 +66,7 @@ def plot_all_distributions(df):
         plot_distribution(df, column, f"Distribution of {column}")
 
 
+# Nick Luedtke: Applies PCA and clustering to the processed data
 def perform_pca_and_clustering(df):
     print("Data before PCA and clustering:\n", df.head())
     df_numeric = df.select_dtypes(include=[np.number])
@@ -84,6 +88,7 @@ def map_clusters_to_diseases(df, labels):
     return cluster_to_disease
 
 
+# Andrew Ly: Maps disease predictions based on clustering results
 def predict_disease(patient_data, pca, kmeans, cluster_to_disease_map, scaler, mean):
     patient_df = pd.DataFrame([patient_data])
     print("Patient data before preprocessing:\n", patient_df.head())
