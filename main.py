@@ -1,93 +1,114 @@
+import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import RobustScaler, StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Matthew Storm
-def getData():
-    # Load the CSV file into a DataFrame
-    df = pd.read_csv('data/data.csv')
 
-    if df is None:
-        raise Exception("Data not found")
-
-    # Map Yes/No values to 1/0 for binary columns
-    df['Fever'] = df['Fever'].map({'Yes': 1, 'No': 0})
-    df['Cough'] = df['Cough'].map({'Yes': 1, 'No': 0})
-    df['Fatigue'] = df['Fatigue'].map({'Yes': 1, 'No': 0})
-    df['Difficulty Breathing'] = df['Difficulty Breathing'].map({'Yes': 1, 'No': 0})
-
-    # Map gender to 0/1
-    df['Gender'] = df['Gender'].map({'Female': 0, 'Male': 1})
-
-# Fahran Sarkar
-    # Map categorical levels to integers for Blood Pressure and Cholesterol Level
-    df['Blood Pressure'] = df['Blood Pressure'].map({'Low': 0, 'Normal': 1, 'High': 2})
-    df['Cholesterol Level'] = df['Cholesterol Level'].map({'Low': 0, 'Normal': 1, 'High': 2})
-
-    # Map Outcome Variable to 1/0
-    df['Outcome Variable'] = df['Outcome Variable'].map({'Positive': 1, 'Negative': 0})
-
-    # Fill missing values with column means or defaults
-    df.fillna({
-        'Fever': df['Fever'].mean(),
-        'Cough': df['Cough'].mean(),
-        'Fatigue': df['Fatigue'].mean(),
-        'Difficulty Breathing': df['Difficulty Breathing'].mean(),
-        'Age': df['Age'].mean(),
-        'Gender': 1,  # Assume Male as default
-        'Blood Pressure': 1,  # Assume Normal as default
-        'Cholesterol Level': 1  # Assume Normal as default
-    }, inplace=True)
-
+def load_data(filepath):
+    df = pd.read_csv(filepath)
+    print("Data loaded:\n", df.head())
     return df
 
 
-def preprocess_data(df):
-    return getData()
+def preprocess_data(df, is_training_data=True, scaler=None, mean=None):
+    print("Data before preprocessing:\n", df.head())
+    mappings = {
+        'Fever': {'Yes': 1, 'No': 0},
+        'Cough': {'Yes': 1, 'No': 0},
+        'Fatigue': {'Yes': 1, 'No': 0},
+        'Difficulty Breathing': {'Yes': 1, 'No': 0},
+        'Gender': {'Female': 0, 'Male': 1},
+        'Blood Pressure': {'Low': 0, 'Normal': 1, 'High': 2},
+        'Cholesterol Level': {'Low': 0, 'Normal': 1, 'High': 2}
+    }
+    for col, map_dict in mappings.items():
+        if col in df.columns:
+            df[col] = df[col].map(map_dict)
 
-# Julian Bartosz
-def calculate_mean_of_group(df):
-    df = preprocess_data(df)
-    # Calculate the mean of each column grouped by 'Disease'
-    grouped = df.groupby('Disease').mean()
-    return grouped
+    numeric_cols = ['Fever', 'Cough', 'Fatigue', 'Difficulty Breathing', 'Age', 'Gender', 'Blood Pressure', 'Cholesterol Level']
+    numeric_cols = [col for col in numeric_cols if col in df.columns]
 
-# Nick Luedtke
-def predict_disease(df, patient_data):
-    group_means = calculate_mean_of_group(df)
-    patient_series = pd.Series(patient_data)
+    if numeric_cols:
+        if is_training_data:
+            df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+            mean = df[numeric_cols].mean()
+        else:
+            df[numeric_cols] = df[numeric_cols].fillna(mean)
 
-    # Calculate Euclidean distance between input data and group means
-    distances = {}
-    for disease, row in group_means.iterrows():
-        distances[disease] = ((row - patient_series) ** 2).sum()
+    if is_training_data:
+        scaler = RobustScaler()
+        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+    else:
+        df[numeric_cols] = scaler.transform(df[numeric_cols])
+    print("Data after preprocessing:\n", df.head())
+    return df, scaler, mean
 
-    # Find the disease with the smallest distance
-    closest_match = min(distances, key=distances.get)
-    return closest_match
 
-# Andrew Ly
-def get_user_input():
-    patient_data = {}
-    # Collect user input for various symptoms and demographics
-    patient_data['Fever'] = int(input("Do you have a fever? Enter 1 for Yes, 0 for No: "))
-    patient_data['Cough'] = int(input("Do you have a cough? Enter 1 for Yes, 0 for No: "))
-    patient_data['Fatigue'] = int(input("Do you feel fatigue? Enter 1 for Yes, 0 for No: "))
-    patient_data['Difficulty Breathing'] = int(input("Do you have difficulty breathing? Enter 1 for Yes, 0 for No: "))
-    patient_data['Age'] = int(input("Enter your age: "))
-    patient_data['Gender'] = int(input("Enter your gender: 1 for Male, 0 for Female: "))
-    patient_data['Blood Pressure'] = int(input("Enter your blood pressure: 0 for Low, 1 for Normal, 2 for High: "))
-    patient_data['Cholesterol Level'] = int(
-        input("Enter your cholesterol level: 0 for Low, 1 for Normal, 2 for High: "))
-    patient_data['Outcome Variable'] = 0  # Not used for prediction, kept as a placeholder
+def plot_distribution(df, column, title):
+    plt.figure(figsize=(8, 6))
+    sns.countplot(x=column, data=df)
+    plt.title(title)
+    plt.savefig(f"{column}_distribution.png")
+    plt.close()
 
-    return patient_data
 
-# Fahran Sarkar
+def plot_all_distributions(df):
+    categorical_columns = ['Fever', 'Cough', 'Fatigue', 'Difficulty Breathing', 'Gender', 'Blood Pressure', 'Cholesterol Level']
+    for column in categorical_columns:
+        plot_distribution(df, column, f"Distribution of {column}")
+
+
+def perform_pca_and_clustering(df):
+    print("Data before PCA and clustering:\n", df.head())
+    df_numeric = df.select_dtypes(include=[np.number])
+    pca = PCA(n_components=0.95)
+    df_pca = pca.fit_transform(df_numeric)
+    kmeans = KMeans(n_clusters=5, random_state=42)
+    kmeans.fit(df_pca)
+    print("Cluster Centers:\n", kmeans.cluster_centers_)
+    print("Explained Variance Ratio:\n", pca.explained_variance_ratio_)
+    silhouette_avg = silhouette_score(df_pca, kmeans.labels_)
+    print("Silhouette Score: ", silhouette_avg)
+    return pca, kmeans, kmeans.labels_
+
+
+def map_clusters_to_diseases(df, labels):
+    df['Cluster'] = labels
+    cluster_to_disease = df.groupby('Cluster')['Disease'].agg(lambda x: x.mode()[0]).to_dict()
+    print("Cluster to disease mapping:\n", cluster_to_disease)
+    return cluster_to_disease
+
+
+def predict_disease(patient_data, pca, kmeans, cluster_to_disease_map, scaler, mean):
+    patient_df = pd.DataFrame([patient_data])
+    print("Patient data before preprocessing:\n", patient_df.head())
+    patient_df, _, _ = preprocess_data(patient_df, is_training_data=False, scaler=scaler, mean=mean)
+    print("Patient data after preprocessing:\n", patient_df.head())
+    patient_pca = pca.transform(patient_df)
+    cluster_label = kmeans.predict(patient_pca)[0]
+    return cluster_to_disease_map[cluster_label]
+
+
 if __name__ == '__main__':
-    df = getData()
+    df = load_data('data/data.csv')
+    df_preprocessed, scaler, mean = preprocess_data(df)
+    plot_all_distributions(df_preprocessed)  # Plot distributions for each column
+    train_df, test_df = train_test_split(df_preprocessed, test_size=0.2, random_state=42)
 
-    # Get user input for patient data
-    patient_data = get_user_input()
+    train_df_for_pca = train_df.drop(columns=['Disease']).copy() if 'Disease' in train_df.columns else train_df.copy()
 
-    # Predict the disease based on the user input
-    predicted_disease = predict_disease(df, patient_data)
+    pca, kmeans, labels = perform_pca_and_clustering(train_df_for_pca)
+    train_df['Disease'] = df['Disease'].iloc[train_df.index]
+    cluster_to_disease_map = map_clusters_to_diseases(train_df, labels)
+
+    test_sample = {
+        'Fever': 1, 'Cough': 0, 'Fatigue': 1, 'Difficulty Breathing': 0,
+        'Age': 30, 'Gender': 1, 'Blood Pressure': 2, 'Cholesterol Level': 1
+    }
+    predicted_disease = predict_disease(test_sample, pca, kmeans, cluster_to_disease_map, scaler, mean)
     print(f"Predicted Disease: {predicted_disease}")
