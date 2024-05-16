@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 DEBUG_MODE = False
 
@@ -50,12 +50,14 @@ def preprocess_data(df, is_training_data=True, scaler=None, mean=None):
             df[numeric_cols] = df[numeric_cols].fillna(mean)
 
     if is_training_data:
-        scaler = RobustScaler()
+        scaler = MinMaxScaler()
         df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
     else:
         df[numeric_cols] = scaler.transform(df[numeric_cols])
+
     if DEBUG_MODE:
         print("Data after preprocessing:\n", df.head())
+
     return df, scaler, mean
 
 
@@ -170,7 +172,6 @@ def user_menu(pca, kmeans, cluster_to_disease_map, scaler, mean):
 if __name__ == '__main__':
     df = load_data('data/data.csv')
     df_preprocessed, scaler, mean = preprocess_data(df)
-    plot_all_distributions(df_preprocessed)  # Plot distributions for each column
     train_df, test_df = train_test_split(df_preprocessed, test_size=0.2, random_state=42)
 
     train_df_for_pca = train_df.drop(columns=['Disease']).copy() if 'Disease' in train_df.columns else train_df.copy()
